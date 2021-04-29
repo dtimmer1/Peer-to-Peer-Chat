@@ -1,0 +1,23 @@
+[package]
+name = "bing2bing-tui"
+version = "0.1.0"
+authors = ["Jeremy Blackburn <jblackbu@binghamton.edu>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tui = { version = "0.14", default-features = false, features = ["crossterm", "serde"] }
+structopt = "0.3"
+tokio = { version = "1", features = ["full", "tracing"] }
+tracing = { version = "0.1", features = ["log"] }
+#tracing = { version = "0.1", features = ["log", "log-always"] }
+tracing-log = { version = "0.1", features = ["env_logger", "log-tracer"] }
+tracing-subscriber = { version = "0.2", default-features = false, features = ["fmt", "ansi", "env-filter", "chrono", "tracing-log",] }
+chrono = {version = "0.4", features = ["serde"] }
+crossterm = {version = "0.19" }
+
+unicode-width = "0.1"
+tui-logger = "0.6"
+log = "0.4"
+libb2b = { path = "../libb2b" }

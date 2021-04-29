@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "libb2b",
+    "bing2bing-tui",
+]
+
+#default-members = ["bing2bing-tui"]
