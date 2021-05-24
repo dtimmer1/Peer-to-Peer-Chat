@@ -2,6 +2,7 @@ use crate::PeerRxChannel;
 use crate::{Bing2BingError, Connection, PeerControlMessage};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::cmp::Ordering;
 use tokio::net::TcpStream;
 
 pub(crate) struct Peer {
@@ -59,11 +60,11 @@ pub struct PeerData {
     city: String,
     lat: f64,
     lng: f64,
-    peers: Vec<String>,
+    peers: Vec<(String, u32)>,
 }
 
 impl PeerData {
-    pub fn new(city: &str, lat: f64, lng: f64, peers: Vec<String>) -> Self {
+    pub fn new(city: &str, lat: f64, lng: f64, peers: Vec<(String, u32)>) -> Self {
         Self {
             city: city.to_string(),
             lat,
@@ -71,4 +72,8 @@ impl PeerData {
             peers,
         }
     }
+
+	pub fn get_peers(&self) -> &Vec<(String, u32)> {
+		&(self.peers)
+	}
 }

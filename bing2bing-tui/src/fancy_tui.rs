@@ -437,7 +437,10 @@ async fn start_peer(
                 match message_from_ui {
                     UiClientMessage::Say(message) => {
                         moved_client.say(message).await;
-                    }
+                    },
+					UiClientMessage::Whisper(to, message) => {
+						moved_client.whisper(to, message).await;
+					},
                 }
             }
         }
@@ -457,7 +460,17 @@ async fn start_peer(
                         msg
                     );
                     app.add_message(&formatted_say);
-                }
+                },
+				ClientServerMessage::Whisper((from, to, msg)) => {
+					let formatted_say = format!(
+						"[{}] {} whispered to {}: {}\n",
+                        Local::now().format("%Y-%m-%d %H:%M:%S"),
+                        from,
+						to,
+                        msg
+					);
+                    app.add_message(&formatted_say);
+				},
             }
         }
     });

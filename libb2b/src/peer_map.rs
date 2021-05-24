@@ -9,6 +9,8 @@ use std::sync::Arc;
 use crate::Bing2BingFrame;
 use crate::{PeerControlMessage, PeerTxChannel};
 
+use priority_queue::PriorityQueue;
+
 /// A `PeerMap` contains data and functionality related to peers that
 /// this peer has initiated connections with.
 /// I.e., the peers that this peer can send comands _to_.
@@ -130,4 +132,22 @@ impl PeerMap {
             }
         }
     }
+
+	#[instrument(level = "trace")]
+	pub fn send_to_peer(&self, sender: String, recipient: String, frame: Bing2BingFrame) {
+		let mut state = self.shared.state.lock().unwrap();
+
+		for (peer_addr, peer_tx) in state.entries.iter_mut() {
+			if *peer_addr == recipient {
+				let frame = PeerControlMessage::Frame(frame.clone());
+				if let Err(err) = peer_tx.send(frame) {
+					error!(
+						"There was an error when trying to broadcast to peer {:?}: {:?}",
+						*peer_addr, err
+					);
+				};
+			}
+		}
+	}
 }
+

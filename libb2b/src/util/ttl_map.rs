@@ -128,6 +128,16 @@ impl<T: 'static + Clone + std::marker::Send> TtlMap<T> {
         }
     }
 
+	pub(crate) fn get_keys(&self) -> Vec<String>{
+		let state = self.shared.state.lock().unwrap();
+		let keys : Vec<String> = state
+			.entries
+			.keys()
+			.map(|x| x.to_string())
+			.collect();
+		keys
+	}
+
     /// Gets `n` random key/values from this `TtlMap`.
     pub(crate) fn random_keys_vals(&self, n: usize) -> Vec<(String, T)> {
         let state = self.shared.state.lock().unwrap();

@@ -5,16 +5,20 @@ use tokio::net::TcpStream;
 
 use tokio::net::TcpListener;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::{
-    cmd::{Announce, Say},
+    cmd::{Announce, Say, Whisper},
     peer::PeerData,
     util::{ConnectionCounter, SequenceNumberGenerator},
     ClientServerMessage, ClientTxChannel, Peer, ServerRxChannel,
 };
 
 use tracing::{debug, instrument, trace};
+
+use std::collections::HashMap;
+use priority_queue::PriorityQueue;
+use std::cmp::Reverse;
 
 use crate::cmd::Register;
 use crate::Bing2BingError;
@@ -39,6 +43,7 @@ pub struct Server {
     num_incoming_conns: ConnectionCounter,
     client_tx: ClientTxChannel,
     rx: ServerRxChannel,
+	//waiting_for_ping: bool,
 }
 
 impl Server {
@@ -58,25 +63,86 @@ impl Server {
             num_incoming_conns: ConnectionCounter::new(0),
             client_tx,
             rx,
+			//waiting_for_ping: false,
         })
     }
+
+	pub fn shortest_path(
+		peer_map: &PeerMap,
+		adjacency_list: TtlMap<PeerData>,
+		source: String,
+		destination: String,
+	) -> Vec<String> {
+		let mut vertices = PriorityQueue::new();
+		let mut change_vertices = HashMap::new();
+		let list_of_peers = adjacency_list.get_keys();
+		println!("peer names: {:?}", list_of_peers);
+		let mut previous = HashMap::new();
+		for peer in list_of_peers {
+			vertices.push(peer.clone(), Reverse(u32::MAX - 100000));
+			change_vertices.insert(peer, u32::MAX - 100000);
+		}
+		vertices.push(source.clone(), Reverse(0));
+		change_vertices.insert(source.clone(), 0);
+
+		while vertices.peek() != None {
+			let smallest = vertices.pop().unwrap();
+			println!("{:?}", smallest);
+			let peer_data = adjacency_list.get(&smallest.0).unwrap();
+			let children = peer_data.get_peers().clone();
+			for (child, latency) in children{
+				println!("{:?}", child);
+				match change_vertices.get(&child) {
+					Some(num) => {
+						let val = smallest.1.0;
+						if num > &(&val + latency) {
+							change_vertices.insert(child.to_string(), val+latency);
+							vertices.change_priority(&child, Reverse(val + latency));
+							previous.insert(child, smallest.0.clone());
+						}
+					}
+
+					None => {
+						let val = smallest.1.0;
+
+						change_vertices.insert(child.to_string(), val+latency);
+						vertices.change_priority(&child, Reverse(val + latency));
+						previous.insert(child, smallest.0.clone());
+					}
+				}
+			}
+		}
+
+		let mut shortest_path = Vec::new();
+
+		let mut this_vertex = destination.clone();
+
+		while(this_vertex != source.clone()){
+			shortest_path.insert(0, this_vertex.clone());
+			this_vertex = previous.get(&this_vertex).unwrap().to_string();
+		}
+
+		println!("{:?}", shortest_path);
+		shortest_path
+	}
 
     /// Begin listening for inbound connections.
     #[instrument(level = "trace")]
     pub async fn listen(
         &self,
         peer_map: &PeerMap,
+		adjacency_list: TtlMap<PeerData>,
         client_tx: ClientTxChannel,
     ) -> Result<(), Bing2BingError> {
         let peers = peer_map;
-        let adjacency_list: TtlMap<PeerData> = TtlMap::new();
+		let list = adjacency_list;
         let processed_commands: TtlMap<bool> = TtlMap::new();
 
         loop {
             let (stream, addr) = self.listener.accept().await?;
-
+			let name = self.name.clone();
             let peers = peers.clone(); //Arc::clone(&peers);
-            let adjacency_list = adjacency_list.clone();
+            let list = list.clone();
 
             let processed_commands = processed_commands.clone();
             let connection_counter = self.num_incoming_conns.clone();
@@ -89,8 +155,9 @@ impl Server {
                 connection_counter.inc();
 
                 let connection_handler = Server::handle_connection(
+					name,
                     &peers,
-                    adjacency_list,
+                    list,
                     processed_commands,
                     stream,
                     addr,
@@ -114,8 +181,9 @@ impl Server {
     /// command hasn't already been processed, and if it hasn't, processes the command.
     /// This method will also pass relevant [ClientServerMessage]s up to a
     /// [Client](crate::Client) for further use.
-    #[instrument(level = "trace")]
+   #[instrument(level = "trace")]
     pub async fn handle_connection(
+		name: String,
         peers: &PeerMap,
         adjacency_list: TtlMap<PeerData>,
         processed_commands: TtlMap<bool>,
@@ -168,7 +236,19 @@ impl Server {
                 Bing2BingCommand::Announce(cmd) => cmd.apply(&peers, &adjacency_list).await?,
                 Bing2BingCommand::Broadcast(cmd) => cmd.apply(&peers).await?,
                 Bing2BingCommand::Deliver(cmd) => cmd.apply(&peers).await?,
-                Bing2BingCommand::Whisper(cmd) => cmd.apply(&peers).await?,
+                Bing2BingCommand::Whisper(cmd) => {
+                    trace!("Received a Whisper command on an incoming connection");					   if name.clone() == cmd.destination.clone() {
+						trace!("Sending to client");
+						client_tx
+							.send(ClientServerMessage::Whisper((
+								cmd.source.clone(),
+								cmd.destination.clone(),
+								cmd.message.clone(),
+							)))
+							.await?;
+					}
+                    cmd.apply(&peers).await?;
+                }
                 Bing2BingCommand::Extension(cmd) => cmd.apply(&peers).await?,
                 Bing2BingCommand::Register(cmd) => {
                     tracing::error!(
@@ -194,6 +274,15 @@ impl Server {
         peer_map.broadcast(from, frame);
     }
 
+   pub async fn whisper(peer_map: &PeerMap, adjacency_list: TtlMap<PeerData>, from: String, to: String, message: String, sequence_number: u64) {
+	
+	   let mut path = Server::shortest_path(&peer_map.clone(), adjacency_list.clone(), from.clone(), to.clone());
+
+	   let next_step = path.remove(0);
+	   let frame = Whisper::new(from.to_string(), sequence_number, &to, &message, path).into_frame();	
+		peer_map.send_to_peer(from, next_step, frame);
+    }
+	
     /// Convienence function that gets the next sequence number for a message originating from this peer.
     fn next_sequence_number(&self) -> u64 {
         self.sequence_numbers.next()
@@ -240,6 +329,7 @@ impl Server {
         let received_peers = self.parse_register_response(response_frame)?;
         trace!("received peers from announce: {:?}", received_peers);
         let peer_map = PeerMap::default();
+		let adjacency_list: TtlMap<PeerData> = TtlMap::new();
 
         // we need to add each of these to the peer map.
         for (peer_name, ip_address, port) in received_peers {
@@ -251,8 +341,9 @@ impl Server {
 
         // let next_sequence_number = self.sequence_numbers.clone();
         let peer_map_move = peer_map.clone();
+		let adjacency_list_move = adjacency_list.clone();
 
-        self.client_message_handler(&peer_map_move, self.rx.clone());
+        self.client_message_handler(&peer_map_move, adjacency_list_move.clone(), self.rx.clone());
 
         // start up an announce task
         let next_sequence_number = self.sequence_numbers.clone();
@@ -274,19 +365,21 @@ impl Server {
                 ip_address,
                 port,
                 &peer_map_move,
+				adjacency_list_move,
                 next_sequence_number,
                 num_incoming_conns,
                 max_incoming_connections,
             )
         });
 
-        self.listen(&peer_map, self.client_tx.clone()).await
+        self.listen(&peer_map, adjacency_list, self.client_tx.clone()).await
     }
 
     /// This method handles messages that come in from the associated [Client](crate::Client)
     #[instrument(level = "trace")]
-    fn client_message_handler(&self, peer_map: &PeerMap, rx: ServerRxChannel) {
+    fn client_message_handler(&self, peer_map: &PeerMap, adjacency_list: TtlMap<PeerData>, rx: ServerRxChannel) {
         let peer_map = peer_map.clone();
+		let adjacency_list = adjacency_list.clone();
         let next_sequence_number = self.sequence_numbers.clone();
         tokio::spawn(async move {
             loop {
@@ -301,7 +394,14 @@ impl Server {
                             trace!("exceutiong Server::say");
 
                             Server::say(&peer_map, from, message, sequence_number).await;
-                        }
+                        },
+						ClientServerMessage::Whisper((from, to, message)) => {
+							trace!("matched a ClientServerMessage::Whisper message");
+							let sequence_number = next_sequence_number.next();
+
+							trace!("executing Server::whisper");
+							Server::whisper(&peer_map, adjacency_list.clone(), from, to, message, sequence_number).await;
+						}
                     }
                 }
             }
@@ -390,6 +490,7 @@ async fn start_announce(
     ip_address: String,
     port: u64,
     peer_map: &PeerMap,
+	adjacency_list: TtlMap<PeerData>,
     next_sequence_number: SequenceNumberGenerator,
     num_incoming_conns: ConnectionCounter,
     max_incoming_conns: u64,
@@ -397,7 +498,10 @@ async fn start_announce(
     loop {
         let sequence_number = next_sequence_number.next();
 
-        let peers = peer_map.peer_names();
+        let peers : Vec<(String, u32)> = peer_map.peer_names()
+			.into_iter()
+			.map(|x| (x, 1))
+			.collect();
 
         let num_incoming_conns = num_incoming_conns.get();
 
@@ -406,6 +510,25 @@ async fn start_announce(
             false => 0,
         };
 
+		adjacency_list.set(
+			name.clone(),
+			PeerData::new(
+			"New York", 
+			40.6943, -73.9249, peers.clone()),
+            Some(Duration::from_secs(30)),
+		);
+
+
+	/*	for peer in peers {
+			let ping = Ping::new(
+				name.clone(),
+				sequence_number.clone(),
+			).into_frame();
+			let time = Instant::now();
+			peer_map.send_to_peer(name.clone(), peer, ping);
+
+		}
+	*/
         // POINTS AVAILABLE
         // Try making a configuration setting that does this with some more
         // configurability

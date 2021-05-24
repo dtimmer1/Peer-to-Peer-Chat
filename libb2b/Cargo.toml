@@ -20,5 +20,5 @@ bytes = "1"
 structopt = "0.3"
 rand = "0.8"
 async-channel = "1.6"
-
+priority-queue = "1.1.1"
 

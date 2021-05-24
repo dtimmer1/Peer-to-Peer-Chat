@@ -23,9 +23,16 @@ impl Client {
     /// A method for use by users of `Client` to say a message that will be
     /// broadcast through the network.
     #[instrument(level = "trace")]
-    pub async fn say(&self, message: String) {
-        let message = ClientServerMessage::Say((self.shared.name.clone(), message));
+    pub async fn say(&self, msg: String) {
+        let message = ClientServerMessage::Say((self.shared.name.clone(), msg));
 
+        // pass the message on to the server
+        self.shared.server_tx.send(message).await.unwrap();
+    }
+
+    #[instrument(level = "trace")]
+    pub async fn whisper(&self, to: String, msg: String) {
+        let message = ClientServerMessage::Whisper((self.shared.name.clone(), to, msg));
         // pass the message on to the server
         self.shared.server_tx.send(message).await.unwrap();
     }

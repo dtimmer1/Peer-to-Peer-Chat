@@ -28,7 +28,7 @@ pub struct Cli {
     tracker_port: u16,
 
     /// maximum number of incomming connections that will be advertised when Announcing to the network.
-    #[structopt(default_value = "5")]
+    #[structopt(default_value = "2")]
     max_connections: u64,
 
     /// Use simple ui mode? (/say and /quit are the only things that work)
@@ -52,4 +52,5 @@ pub async fn main() -> Result<(), libb2b::Bing2BingError> {
 #[derive(Debug)]
 pub enum UiClientMessage {
     Say(String),
+	Whisper(String, String),
 }

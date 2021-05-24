@@ -64,6 +64,7 @@ pub async fn start(args: Cli) -> Result<(), libb2b::Bing2BingError> {
 #[derive(Debug, Clone)]
 pub enum UiClientMessage {
     Say(String),
+	Whisper(String, String),
 }
 
 #[tokio::main]
@@ -100,7 +101,10 @@ async fn start_peer(
                 match message_from_ui {
                     UiClientMessage::Say(message) => {
                         moved_client.say(message).await;
-                    }
+                    },
+					UiClientMessage::Whisper(to, message) => {
+						moved_client.whisper(to, message).await;
+					},
                 }
             }
         }
@@ -123,7 +127,18 @@ async fn start_peer(
                     );
                     stdout.write_all(formatted_say.as_bytes()).await.unwrap();
                     stdout.flush().await.unwrap();
-                }
+                },
+				ClientServerMessage::Whisper((from, to, msg)) => {
+					let formatted_say = format!(
+						"[{}] {} whispered to {}: {}\n",
+                        Local::now().format("%Y-%m-%d %H:%M:%S"),
+                        from,
+						to,
+                        msg
+					);
+                    stdout.write_all(formatted_say.as_bytes()).await.unwrap();
+                    stdout.flush().await.unwrap();
+				},
             }
         }
     });
@@ -153,10 +168,20 @@ async fn start_ui(app: App, client_tx: UiClientTxChannel) {
                 let client_tx = client_tx.clone();
 
                 let msg = UiClientMessage::Say(line);
-
+	
                 trace!("Ui thread sending {:?} over client channle", msg);
                 client_tx.send(msg).unwrap();
             }
+			if line.starts_with("/whisper ") {
+				trace!("input line started with /whisper !");
+				let string = line.clone().strip_prefix("/whisper ").unwrap().to_string();
+				let splitter: Vec<&str> = string.splitn(2, ' ').collect();
+				let client_tx = client_tx.clone();
+				if splitter.len() == 2{
+					let msg = UiClientMessage::Whisper(splitter[0].to_string(), splitter[1].to_string());
+					client_tx.send(msg).unwrap();
+				}
+			}
         }
     });
 

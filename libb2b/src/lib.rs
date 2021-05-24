@@ -51,6 +51,7 @@ type PeerRxChannel = mpsc::UnboundedReceiver<PeerControlMessage>;
 #[derive(Debug)]
 pub enum ClientServerMessage {
     Say((String, String)),
+	Whisper((String, String, String)),
 }
 
 #[derive(Debug)]
@@ -86,6 +87,8 @@ pub enum Bing2BingFrame {
     Array(Vec<Bing2BingFrame>),
     /// A 64 bit float
     Float(f64),
+	/// A string and a numeric type. Used for timing connection latencies.
+	Latency(String, u32),
 }
 
 /// Initializes a new "peer." I.e., creates a [Client] and a [Server] pair.
