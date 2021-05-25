@@ -55,3 +55,15 @@ Thus, there are points available for improving the documentation (talk to me abo
 There are also many places where the code is messier than it should be, or where there might improvements possible via refactoring, etc.
 The `fancy_tui` code in particular is nasty.
 Again, points available but please talk to me first.
+
+# Post-Mortem
+
+My process for implementing the Whisper command followed a few steps:
+
+1) Allow the UI to recognize messages beginning with /whisper.
+2) Initially I had Whisper commands implemented just like Say commands with a destination tacked on, as an intermediate step. The next step was figuring out how to route them.
+3) After writing up Dijkstra's, I had to figure out where to call it. My options were between calling Dijkstra's at every step, and calling it once and forwarding the route along to each successive peer. I ultimately settled on the second one, although like we talked about in the demo that did break the protocol.
+4) I implemented a basic send_to_peer() function in the PeerMap to send frames to one specific peer. Since this doesn't affect the messages sent and received, I don't think this one breaks the protocol.
+5) With routing and sending to one specific peer implemented, I had a successful Whisper command (besides protocol breaking). My stretch goal after that was to try and do latency testing, but finals week decided otherwise :(
+
+The project taught me a lot about asynchronous programming as well as Rust. Interestingly, I found that most of my time was spent understanding the control flow of the system. That's probably the case with most systems, though, as there are a lot of moving parts to keep track of. Learning how to do that effectively might have been my biggest takeaway from the project.
