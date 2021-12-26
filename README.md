@@ -1,10 +1,6 @@
-In this project, you will be working to implement some additional features in a P2P chat system.
-
-The repository you have been given implements the basics, including the network architecture, as well as two sample user interfaces, one simple, one fancy.
+This is my final project for CS451. The goal was to implement a targeted message command in a peer-to-peer chat system we had been building up over the course of the semester.
 
 # Usage
-
-There are a few runnable programs in this repository.
 
 ## Tracker
 
@@ -13,7 +9,6 @@ You can pass command line arguments in when using cargo: `cargo run -p libb2b --
 
 The tracker takes an ip address and port to listen on.
 If you set the ip address to 0.0.0.0 it will listen on whatever ip addresses the machine responds to.
-
 
 ## Client
 
@@ -32,29 +27,6 @@ Note that you *cannot* set this to be 0.0.0.0 because this value is directly use
 5. `--name` the name that this peer will go by.
 
 6. `--simple` if set, you will start up a simple client that only responds to `/say` and `/quit` input. If you don't set it, then a fancier UI will be used. For the fancy TUI, pressing `e` will put you into edit mode, pressing `esc` will bring you out of edit mode, typing `q` will quit, and pressing `l` or `h` will move between the two tabs.
-
-
-# Grading
-
-If you are able to demo, with a UI, a program that manages to propagate messages through the system, you will earn *70 points*.
-
-If you are able to demo a peer that propagates messages through the system _and displays `Whisper` messages destined for the peer_, you will earn *10 points*.
-
-Implementing the `Whisper` and `Deliver` commands (see the docs), will earn *30 points*.
-
-Implementing an `Extension` command will earn *30 points*.
-
-There are several places in the code noted with "points available."
-If you would like to try addressing one of those, let me know and we'll determine how many points it will be worth.
-
-There are also points available for doing something cool in general (there are a *lot* of opportunities here with the TUI in particular.)
-
-I made an effort with documentation, but it is not as good as it could be.
-Thus, there are points available for improving the documentation (talk to me about it before hand).
-
-There are also many places where the code is messier than it should be, or where there might improvements possible via refactoring, etc.
-The `fancy_tui` code in particular is nasty.
-Again, points available but please talk to me first.
 
 # Post-Mortem
 
